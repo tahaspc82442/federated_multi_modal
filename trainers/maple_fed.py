@@ -480,4 +480,11 @@ class MaPLeFederated(TrainerX):
 
         print(f"Saved up to {max_per_class} images per class to: {subset_dir}")
 
+    def test(self):
+        if self.check_weights_valid(self.global_weights):
+            self.broadcast_weights(self.global_weights)
+            self.clients[0].model.eval()
+            with torch.no_grad():
+                results = self.clients[0].test(evaluate_train =True)
+
 
