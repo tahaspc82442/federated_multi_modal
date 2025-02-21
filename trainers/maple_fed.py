@@ -19,6 +19,7 @@ from trainers.maple import MaPLe
 # Custom client data manager
 from .client_datamanager import ClientDataManager
 import os
+from tqdm import trange
 
 @TRAINER_REGISTRY.register()
 class MaPLeFederated(TrainerX):
@@ -68,9 +69,17 @@ class MaPLeFederated(TrainerX):
         dm_uc = DataManager(uc_cfg)
         dataset_uc = dm_uc.dataset
 
+
+        euro_cfg = self.cfg.clone()
+        euro_cfg.defrost()
+        euro_cfg.DATASET.NAME = "EuroSAT"
+        dm_euro = DataManager(euro_cfg)
+        dataset_euro = dm_euro.dataset
+
         # local label->classname
         pn_lab2cname = dm_pn.lab2cname
         uc_lab2cname = dm_uc.lab2cname
+        euro_lab2cname = dm_euro.lab2cname
 
         rename_map = {
             "tenniscourt": "tennis_court",
@@ -89,7 +98,8 @@ class MaPLeFederated(TrainerX):
         # -- 3) Form global list of classes (union)
         set_pn = set(pn_lab2cname.values())
         set_uc = set(uc_lab2cname.values())
-        global_list = sorted(list(set_pn.union(set_uc)))
+        set_euro = set(euro_lab2cname.values())
+        global_list = sorted(list(set_pn.union(set_uc).union(set_euro)))
         global_num_classes = len(global_list)
         print(f"[INFO] Unified #classes = {global_num_classes}")
 
@@ -216,7 +226,7 @@ class MaPLeFederated(TrainerX):
         # done
         self.finalize_training()"""
     def train(self):
-        for round_idx in range(self.num_rounds):
+        for round_idx in trange(self.num_rounds):
             print(f"\n--- Federated Round {round_idx+1}/{self.num_rounds} ---")
 
             # 1) Broadcast global weights (if valid)

@@ -1,6 +1,3 @@
-
-
-
 import os
 import pickle
 
@@ -22,19 +19,19 @@ NEW_CNAMES = {
     "River": "River",
     "SeaLake": "Sea or Lake",
 }
+
+
 @DATASET_REGISTRY.register()
 class EuroSAT(DatasetBase):
+
     dataset_dir = "eurosat"
 
     def __init__(self, cfg):
         root = os.path.abspath(os.path.expanduser(cfg.DATASET.ROOT))
         self.dataset_dir = os.path.join(root, self.dataset_dir)
         self.image_dir = os.path.join(self.dataset_dir, "2750")
-        self.caption_dir = os.path.join(self.dataset_dir, "captions")
         self.split_path = os.path.join(self.dataset_dir, "split_zhou_EuroSAT.json")
         self.split_fewshot_dir = os.path.join(self.dataset_dir, "split_fewshot")
-
-        # Original EuroSAT initialization
         mkdir_if_missing(self.split_fewshot_dir)
 
         if os.path.exists(self.split_path):
@@ -43,12 +40,6 @@ class EuroSAT(DatasetBase):
             train, val, test = DTD.read_and_split_data(self.image_dir, new_cnames=NEW_CNAMES)
             OxfordPets.save_split(train, val, test, self.split_path, self.image_dir)
 
-        # Add existing captions
-        train = self._add_captions(train)
-        val = self._add_captions(val)
-        test = self._add_captions(test)
-
-        # Rest of original EuroSAT code
         num_shots = cfg.DATASET.NUM_SHOTS
         if num_shots >= 1:
             seed = cfg.SEED
@@ -72,38 +63,11 @@ class EuroSAT(DatasetBase):
 
         super().__init__(train_x=train, val=val, test=test)
 
-    def _add_captions(self, data):
-        """Load existing captions from predefined directory structure"""
-        return [
-            Datum(
-                impath=datum.impath,
-                label=datum.label,
-                classname=datum.classname,
-                caption=self._load_caption(datum.impath)
-            ) for datum in data
-        ]
-
-    def _load_caption(self, image_path):
-        """Directly load caption from parallel directory structure"""
-        # Convert image path to caption path
-        rel_path = os.path.relpath(image_path, self.image_dir)
-        caption_path = os.path.join(self.caption_dir, rel_path)
-        caption_path = os.path.splitext(caption_path)[0] + '.txt'
-        
-        # Load caption with existence check
-        if os.path.exists(caption_path):
-            with open(caption_path, 'r') as f:
-                return f.read().strip()
-        raise FileNotFoundError(f"Caption file missing: {caption_path}")
-
     def update_classname(self, dataset_old):
-        """Preserve captions while updating classnames"""
-        return [
-            Datum(
-                impath=item.impath,
-                label=item.label,
-                classname=NEW_CNAMES[item.classname],
-                caption=item.caption
-            )
-            for item in dataset_old
-        ]
+        dataset_new = []
+        for item_old in dataset_old:
+            cname_old = item_old.classname
+            cname_new = NEW_CNAMES[cname_old]
+            item_new = Datum(impath=item_old.impath, label=item_old.label, classname=cname_new)
+            dataset_new.append(item_new)
+        return dataset_new
