@@ -11,16 +11,16 @@ from .oxford_pets import OxfordPets
 from .dtd import DescribableTextures as DTD
 
 NEW_CNAMES = {
-    "AnnualCrop": "Annual Crop Land",
+    "AnnualCrop": "Annual_Crop_Land",
     "Forest": "Forest",
-    "HerbaceousVegetation": "Herbaceous Vegetation Land",
-    "Highway": "Highway or Road",
-    "Industrial": "Industrial Buildings",
-    "Pasture": "Pasture Land",
-    "PermanentCrop": "Permanent Crop Land",
-    "Residential": "Residential Buildings",
+    "HerbaceousVegetation": "Herbaceous_Vegetation_Land",
+    "Highway": "Road",
+    "Industrial": "Industrial_Buildings",
+    "Pasture": "Pasture_Land",
+    "PermanentCrop": "Permanent_Crop_Land",
+    "Residential": "Residential_Buildings",
     "River": "River",
-    "SeaLake": "Sea or Lake",
+    "SeaLake": "Sea",
 }
 @DATASET_REGISTRY.register()
 class EuroSAT(DatasetBase):
@@ -44,9 +44,9 @@ class EuroSAT(DatasetBase):
             OxfordPets.save_split(train, val, test, self.split_path, self.image_dir)
 
         # Add existing captions
-        train = self._add_captions(train)
-        val = self._add_captions(val)
-        test = self._add_captions(test)
+        # train = self._add_captions(train)
+        # val = self._add_captions(val)
+        # test = self._add_captions(test)
 
         # Rest of original EuroSAT code
         num_shots = cfg.DATASET.NUM_SHOTS
@@ -69,6 +69,9 @@ class EuroSAT(DatasetBase):
 
         subsample = cfg.DATASET.SUBSAMPLE_CLASSES
         train, val, test = OxfordPets.subsample_classes(train, val, test, subsample=subsample)
+        train = self._add_captions(train)
+        val = self._add_captions(val)
+        test = self._add_captions(test)
 
         super().__init__(train_x=train, val=val, test=test)
 

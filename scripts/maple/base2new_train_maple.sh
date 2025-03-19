@@ -4,7 +4,7 @@
 
 # custom config
 DATA=/raid/biplab/taha
-TRAINER=MaPLe
+TRAINER=MaPLeFederated   #changed here from MaPLeFederated to MaPLe
 
 DATASET=$1
 SEED=$2

@@ -4,7 +4,8 @@ import torch
 from dassl.utils import setup_logger, set_random_seed, collect_env_info
 from dassl.config import get_cfg_default
 from dassl.engine import build_trainer
-
+import wandb
+   
 # custom
 import datasets.oxford_pets
 import datasets.oxford_flowers
@@ -17,7 +18,8 @@ import datasets.sun397
 import datasets.caltech101
 import datasets.ucf101
 import datasets.imagenet
-
+import datasets.mlrs
+import datasets.milaid
 import datasets.imagenet_sketch
 import datasets.imagenetv2
 import datasets.imagenet_a
@@ -133,7 +135,7 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 # fed change 2
     cfg.FED = CN()
-    cfg.FED.NUM_CLIENTS = 2
+    cfg.FED.NUM_CLIENTS = 5
     cfg.FED.NUM_ROUNDS = 30
     cfg.FED.LOCAL_EPOCHS = 10
 
@@ -174,6 +176,12 @@ def main(args):
     print("Collecting env info ...")
     print("** System info **\n{}\n".format(collect_env_info()))
 
+    wandb.init(
+    project="my_fed_project",
+    entity="mohd-taha82442-iit-bombay",  # <-- Your org name here
+    name="exp13"                      # optional run name
+                        )
+
     trainer = build_trainer(cfg)
 
     if args.eval_only:
@@ -183,6 +191,8 @@ def main(args):
 
     if not args.no_train:
         trainer.train()
+
+    
 
 
 if __name__ == "__main__":

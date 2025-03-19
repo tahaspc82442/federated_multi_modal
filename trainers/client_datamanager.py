@@ -154,3 +154,50 @@ class ClientDataManager:
                 if item.label not in self._lab2cname:
                     self._lab2cname[item.label] = item.classname
         return self._lab2cname
+
+
+
+
+# class FedCLIPDatum:
+#     def __init__(self, impath, label, classname):
+#         self.impath = impath
+#         self.label = label
+#         self.classname = classname
+#         self.prompt = f"a satellite image of {classname}"
+
+# class CLIPDataManager:
+#     def __init__(self, cfg):
+#         self.cfg = cfg
+#         self.preprocess = self._clip_preprocess()
+        
+#     def _clip_preprocess(self):
+#         return clip.load(self.cfg.MODEL.BACKBONE.NAME)[1]
+    
+#     def get_loader(self, data, batch_size, is_train):
+#         def collate_fn(batch):
+#             images = []
+#             texts = []
+#             labels = []
+            
+#             for d in batch:
+#                 # Image processing
+#                 img = Image.open(d.impath).convert("RGB")
+#                 images.append(self.preprocess(img))
+                
+#                 # Text processing
+#                 texts.append(clip.tokenize(d.prompt))
+                
+#                 labels.append(d.label)
+            
+#             return {
+#                 'images': torch.stack(images),
+#                 'texts': torch.cat(texts),
+#                 'labels': torch.tensor(labels)
+#             }
+        
+#         return torch.utils.data.DataLoader(
+#             data,
+#             batch_size=batch_size,
+#             collate_fn=collate_fn,
+#             shuffle=is_train
+#         )
