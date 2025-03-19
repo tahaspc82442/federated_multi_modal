@@ -129,3 +129,4 @@ cython_debug/
 .vscode/
 *.zip
 clip/bpe_simple_vocab_16e6.txt.gz
+wandb/
