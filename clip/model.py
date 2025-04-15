@@ -494,6 +494,9 @@ class VisionTransformer_MaPLe(nn.Module):
         #self.new_positional_embedding = nn.Parameter(scale* torch.randn((input_resolution // patch_size) ** 2, width))
         self.ln_post = LayerNorm(width)
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
+
+        self.attention_pooling = AttentionPooling(512)  # Define pooling layer here
+        self.cap_proj = nn.Linear(512, 768)
         #self.dino=Dino()
         self.freeze_all_layers_except_norm()
     
@@ -501,7 +504,7 @@ class VisionTransformer_MaPLe(nn.Module):
     def freeze_all_layers_except_norm(self):
        # print("Unfreezing layer norm of the vision transformer maple")
         for name, param in self.named_parameters():
-            if "ln_pre" in name or "ln_post" in name:
+            if "ln_pre" in name or "ln_post" in name or "attention_pooling" in name or "cap_proj" in name:
                 param.requires_grad = True
             else:
                 param.requires_grad = False
@@ -548,14 +551,14 @@ class VisionTransformer_MaPLe(nn.Module):
 
 
         if clip_embeddings is not None:
-            cap_embedding_dim = 512
-            attention_pooling = AttentionPooling(cap_embedding_dim)
-            attention_pooling = attention_pooling
-            cap_pooled_embeddings = attention_pooling(clip_embeddings.half().to("cuda")).half().to("cuda")
+            #cap_embedding_dim = 512
+            #attention_pooling = AttentionPooling(cap_embedding_dim)
+            #attention_pooling = attention_pooling
+            cap_pooled_embeddings = self.attention_pooling(clip_embeddings.half().to("cuda")).half().to("cuda")
 
            # print( " size of cap_pooled_embeddings", cap_pooled_embeddings.size())  # [batch_size, embedding_dim]
-            linear_projection = nn.Linear(512, 768).half().to("cuda")
-            projected_cap_pooled_embeddings = linear_projection(cap_pooled_embeddings).to("cuda")
+            #linear_projection = nn.Linear(512, 768).half().to("cuda")
+            projected_cap_pooled_embeddings = self.cap_proj(cap_pooled_embeddings).to("cuda")
             #print("size of cap_pooled_embeddings after linear projection", projected_cap_pooled_embeddings.size())
             combined_input = [torch.cat((projected_cap_pooled_embeddings, compound_deeper_prompts[i]), dim=0) for i in range(len(compound_deeper_prompts))] # [batch_size, embedding_dim]
             outputs = self.transformer([x, combined_input , 0])  # third argument is counter # changed compound_deeper_prompts to combined_input

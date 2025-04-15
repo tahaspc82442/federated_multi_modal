@@ -24,7 +24,7 @@ from .debug import debug_collate
 import wandb
 import os.path as osp
 
-
+"""Maple fed without EuroSAT, Eurosat is used for test only"""
 @TRAINER_REGISTRY.register()
 class MaPLeFederated(TrainerX):
     def __init__(self, cfg):
@@ -227,7 +227,7 @@ class MaPLeFederated(TrainerX):
         def remap(data_list, local_lab2cname):
             for idx, item in enumerate(data_list):
                 old_label = item.label
-                cname = local_lab2cname[old_label]
+                cname = local_lab2cname[old_label].lower()
                 gid = name2gid[cname]
                 data_list[idx] = Datum(
                     impath=item.impath,
@@ -592,6 +592,8 @@ class MaPLeFederated(TrainerX):
         )
         artifact.add_file(final_path)
         wandb.log_artifact(artifact)
+
+
 
     def load_model(self, directory, epoch=None):
         """Load aggregator weights from disk."""

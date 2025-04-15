@@ -412,6 +412,10 @@ class MaPLe(TrainerX):
         self.total_batches = 0
         self.classnames= classnames
 
+
+        self.global_model_params_start_round = None 
+        self.prox_mu = 0.1#cfg.FED.PROX_MU
+
         super().__init__(cfg)
 
         # For debugging LR/grad norms
@@ -433,42 +437,103 @@ class MaPLe(TrainerX):
         )
 
     def configure_trainable_params(self, model, freeze_deep_layers=False):
-        """Freeze all except norms and prompts, with deep layer control"""
-        # Pattern matching setup
+        """Freeze selectively, ensuring AttentionPooling and specified layers train."""
         PROMPT_TOKENS = ['ctx', 'prompts_parameters', 'compound_prompts']
         NORM_LAYERS = ['ln_', 'layer_norm', 'ln_pre', 'ln_post']
+        # Add pattern(s) for your AttentionPooling parameters
+        ATTN_POOL_PATTERNS = ['attention_weights'] # Add more if AttentionPooling had other params
         DEEP_LAYERS = {
-            'image': [8, 9, 10, 11],  # Last 4 blocks
-            'text': [9, 10, 11]        # Last 3 blocks
+            'visual': [8, 9, 10, 11],
+            'transformer': [9, 10, 11]
         }
 
+        print(f"Configuring trainable parameters... Freeze deep layers: {freeze_deep_layers}")
+        total_params = 0
+        trainable_params = 0
+
         for name, param in model.named_parameters():
-            # Freeze all by default
-            param.requires_grad = False
-            
-            # Check for normalization layers
+            total_params += param.numel()
+            param.requires_grad = False # Freeze all by default
+
             is_norm = any(nl in name for nl in NORM_LAYERS)
-            
-            # Check for prompt tokens
             is_prompt = any(pt in name for pt in PROMPT_TOKENS)
-            
-            # Check if deep layer
+            # Check if it's an AttentionPooling parameter
+            is_attn_pool = any(ap in name for ap in ATTN_POOL_PATTERNS)
             is_deep = False
+            # (Keep the is_deep calculation logic as before...)
             if 'resblocks' in name:
                 parts = name.split('.')
-                block_idx = parts.index('resblocks') + 1
-                block_num = int(parts[block_idx])
-                encoder_type = 'image' if 'image' in name else 'text'
-                is_deep = block_num in DEEP_LAYERS[encoder_type]
+                try:
+                    resblocks_idx = parts.index('resblocks')
+                    if resblocks_idx + 1 < len(parts) and parts[resblocks_idx + 1].isdigit():
+                        block_num = int(parts[resblocks_idx + 1])
+                        encoder_type = None
+                        if 'visual' in parts: encoder_type = 'visual'
+                        elif 'transformer' in parts: encoder_type = 'transformer'
+                        if encoder_type and encoder_type in DEEP_LAYERS:
+                            is_deep = block_num in DEEP_LAYERS[encoder_type]
+                except (ValueError, IndexError):
+                    pass
 
-            # Unfreeze logic
+
+            # --- Unfreeze logic ---
+            # Prioritize unfreezing based on checks
             if is_prompt:
-                param.requires_grad = True  # Always train prompts
+                param.requires_grad = True
+                # print(f"  Unfreezing [PROMPT]: {name}")
+            elif is_attn_pool: # <<<--- ADDED CHECK
+                param.requires_grad = True
+                # print(f"  Unfreezing [ATTN_POOL]: {name}")
             elif is_norm:
-                if freeze_deep_layers and is_deep:
-                    param.requires_grad = False
-                else:
+                if not (freeze_deep_layers and is_deep):
                     param.requires_grad = True
+                    # (optional print statements...)
+            # Else: remains frozen
+
+            if param.requires_grad:
+                trainable_params += param.numel()
+
+        print(f"Total parameters: {total_params:,}")
+        print(f"Trainable parameters: {trainable_params:,}")
+        print("-" * 30)
+
+    # def configure_trainable_params(self, model, freeze_deep_layers=False):
+    #     """Freeze all except norms and prompts, with deep layer control"""
+    #     # Pattern matching setup
+    #     PROMPT_TOKENS = ['ctx', 'prompts_parameters', 'compound_prompts']
+    #     NORM_LAYERS = ['ln_', 'layer_norm', 'ln_pre', 'ln_post']
+    #     DEEP_LAYERS = {
+    #         'image': [8, 9, 10, 11],  # Last 4 blocks
+    #         'text': [9, 10, 11]        # Last 3 blocks
+    #     }
+
+    #     for name, param in model.named_parameters():
+    #         # Freeze all by default
+    #         param.requires_grad = False
+            
+    #         # Check for normalization layers
+    #         is_norm = any(nl in name for nl in NORM_LAYERS)
+            
+    #         # Check for prompt tokens
+    #         is_prompt = any(pt in name for pt in PROMPT_TOKENS)
+            
+    #         # Check if deep layer
+    #         is_deep = False
+    #         if 'resblocks' in name:
+    #             parts = name.split('.')
+    #             block_idx = parts.index('resblocks') + 1
+    #             block_num = int(parts[block_idx])
+    #             encoder_type = 'image' if 'image' in name else 'text'
+    #             is_deep = block_num in DEEP_LAYERS[encoder_type]
+
+    #         # Unfreeze logic
+    #         if is_prompt:
+    #             param.requires_grad = True  # Always train prompts
+    #         elif is_norm:
+    #             if freeze_deep_layers and is_deep:
+    #                 param.requires_grad = False
+    #             else:
+    #                 param.requires_grad = True
 
     def build_model(self):
         """
@@ -496,44 +561,40 @@ class MaPLe(TrainerX):
 
         # 3) Freeze everything except certain layers
         print(f"[Client {self.client_id}] Turning off gradients except prompt_learner & LN/BN.")
-        for param in self.model.parameters():
-            param.requires_grad_(False)
+        # for param in self.model.parameters():
+        #     param.requires_grad_(False)
 
-        # Unfreeze LN/BN modules
-        for name, module in self.model.named_modules():
-            if isinstance(module, (nn.LayerNorm, nn.BatchNorm1d, nn.BatchNorm2d)):
-                for p in module.parameters():
-                    p.requires_grad_(True)
+        # # Unfreeze LN/BN modules
+        # for name, module in self.model.named_modules():
+        #     if isinstance(module, (nn.LayerNorm, nn.BatchNorm1d, nn.BatchNorm2d)):
+        #         for p in module.parameters():
+        #             p.requires_grad_(True)
 
-        # Unfreeze prompt_learner
-        prompt_key = "prompt_learner"
-        for name, param in self.model.named_parameters():
-            if prompt_key in name:
-                param.requires_grad_(True)
+        # # Unfreeze prompt_learner
+        # prompt_key = "prompt_learner"
+        # for name, param in self.model.named_parameters():
+        #     if prompt_key in name:
+        #         param.requires_grad_(True)
 
-        #Unfreeze any "VPT" parameters if you have Visual Prompt Tuning
-        for name, param in self.model.named_parameters():
-            if "VPT" in name:
-                param.requires_grad_(True)
+        # # Unfreeze any "VPT" parameters if you have Visual Prompt Tuning
+        # #for name, param in self.model.named_parameters():
+        #     #if "VPT" in name:
+        #         #param.requires_grad_(True)
 
-        for name, param in self.model.named_parameters():
-            if "visual.transformer.resblocks.11" in name:
-                param.requires_grad_(True)
+        # for name, param in self.model.named_parameters():
+        #     if "visual.transformer.resblocks.11" in name:
+        #         param.requires_grad_(True)
 
         # # Or unfreeze final text encoder block
-        for name, param in self.model.named_parameters():
-            if "transformer.resblocks.11" in name:  # for text
-                param.requires_grad_(True)
-
-        for name, param in self.model.named_parameters():
-            if "attention_pooling" in name or "cap_proj" in name:
-                param.requires_grad_(True)
+        # for name, param in self.model.named_parameters():
+        #     if "transformer.resblocks.11" in name:  # for text
+        #         param.requires_grad_(True)
     
         # for name, module in self.model.named_modules():
         #     if isinstance(module, (nn.LayerNorm, nn.BatchNorm1d, nn.BatchNorm2d)):
         #         for p in module.parameters():
         #             p.requires_grad_(True)
-        #self.configure_trainable_params(self.model, freeze_deep_layers=False)
+        self.configure_trainable_params(self.model, freeze_deep_layers=False)
         # Double check
         enabled = set()
         for n, p in self.model.named_parameters():
@@ -600,61 +661,183 @@ class MaPLe(TrainerX):
         # c might remain on CPU if it's text, depending on your usage
         return x, y, c
 
+    # def forward_backward(self, batch):
+    #     """
+    #     One forward & backward pass on a single batch.
+    #     We do gradient clipping, handle AMP (if used), 
+    #     and track LR changes.
+    #     """
+    #     image, label, caption = self.parse_batch_train(batch)
+    #     self.total_batches += 1
+
+    #     self.check_tensor_validity(image, "input image")
+    #     self.check_tensor_validity(label, "input label")
+
+    #     model = self.model
+    #     optim = self.optim
+    #     scaler = self.scaler
+
+    #     prec = self.cfg.TRAINER.MAPLE.PREC
+
+
+    #     try:
+    #         if prec == "amp":
+    #             # Automatic Mixed Precision
+    #             with autocast():
+    #                 loss = model(image, label, caption)
+    #             optim.zero_grad()
+    #             scaler.scale(loss).backward()
+
+    #             # Unscale before clipping
+    #             scaler.unscale_(optim)
+
+    #             # Clip gradients
+    #             torch.nn.utils.clip_grad_norm_(
+    #                 model.parameters(),
+    #                 max_norm=1.0,
+    #                 error_if_nonfinite=False  # We skip the error to handle non-finite gracefully
+    #             )
+
+    #             scaler.step(optim)
+    #             scaler.update()
+
+    #         else:
+    #             # fp32 or (fp16 if you manually handle it)
+    #             loss = model(image, label, caption)
+    #             optim.zero_grad()
+    #             loss.backward()
+
+    #             torch.nn.utils.clip_grad_norm_(
+    #                 model.parameters(),
+    #                 max_norm=1.0,
+    #                 error_if_nonfinite=False
+    #             )
+
+    #             optim.step()
+
+    #         # Track LR changes
+    #         current_lr = optim.param_groups[0]['lr']
+    #         if not self.lr_history or (current_lr != self.lr_history[-1]):
+    #             self.lr_history.append(current_lr)
+    #             print(f"[Client {self.client_id}] LR changed to: {current_lr}")
+
+    #         # Compute grad norm for logging (optional)
+    #         total_norm = 0.0
+    #         for p in model.parameters():
+    #             if p.grad is not None:
+    #                 param_norm = p.grad.data.norm(2)
+    #                 total_norm += param_norm.item() ** 2
+    #         total_norm = total_norm ** 0.5
+    #         self.grad_norms.append(total_norm)
+
+    #         return {"loss": loss.item()}
+
+    #     except RuntimeError as e:
+    #         # If non-finite gradients occur
+    #         if 'non-finite' in str(e).lower():
+    #             self.nan_count += 1
+    #             nan_rate = self.nan_count / self.total_batches
+    #             print(f"[Client {self.client_id}] NaN rate: {nan_rate:.2%}")
+    #             print(f"Non-finite gradients detected at batch_idx={self.batch_idx}. Skipping batch.")
+    #             optim.zero_grad()  # Reset the optimizer to avoid corrupted state
+    #             return {"loss": float('nan')}
+    #         else:
+    #             raise  # re-raise if it's not a non-finite error
+
+
+
     def forward_backward(self, batch):
         """
-        One forward & backward pass on a single batch.
-        We do gradient clipping, handle AMP (if used), 
-        and track LR changes.
+        One forward & backward pass on a single batch with FedProx.
+        Handles gradient clipping, AMP, LR tracking, and FedProx term.
         """
         image, label, caption = self.parse_batch_train(batch)
-        self.total_batches += 1
+        self.total_batches += 1 # Increment batch counter
 
+        # Placeholder validity checks
         self.check_tensor_validity(image, "input image")
         self.check_tensor_validity(label, "input label")
 
         model = self.model
         optim = self.optim
-        scaler = self.scaler
+        scaler = self.scaler # Assumes self.scaler is initialized (e.g., GradScaler() or None)
+        prec = self.cfg.TRAINER.MAPLE.PREC # Or however you access precision config
 
-        prec = self.cfg.TRAINER.MAPLE.PREC
+        original_loss = None # Initialize
+        total_loss = None    # Initialize
+        proximal_term = torch.tensor(0.0, device=self.device) # Initialize on correct device
 
         try:
+            # --- 1. Forward Pass to get Original Loss ---
             if prec == "amp":
-                # Automatic Mixed Precision
                 with autocast():
-                    loss = model(image, label, caption)
-                optim.zero_grad()
-                scaler.scale(loss).backward()
-
-                # Unscale before clipping
-                scaler.unscale_(optim)
-
-                # Clip gradients
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(),
-                    max_norm=1.0,
-                    error_if_nonfinite=False  # We skip the error to handle non-finite gracefully
-                )
-
-                scaler.step(optim)
-                scaler.update()
-
+                    # Assumes model() returns the task-specific loss
+                    original_loss = model(image, label, caption)
             else:
-                # fp32 or (fp16 if you manually handle it)
-                loss = model(image, label, caption)
-                optim.zero_grad()
-                loss.backward()
+                 # Assumes model() returns the task-specific loss
+                original_loss = model(image, label, caption)
 
+            # Check if original_loss calculation failed (e.g., model returned None)
+            if original_loss is None:
+                 raise RuntimeError("Model did not return a loss value.")
+            if not isinstance(original_loss, torch.Tensor):
+                 raise TypeError(f"Model returned type {type(original_loss)}, expected torch.Tensor.")
+
+
+            # --- 2. FedProx Calculation ---
+            if self.prox_mu > 0 and self.global_model_params_start_round is not None:
+                prox_term_sum = torch.tensor(0.0, device=self.device)
+                current_params = {name: param for name, param in model.named_parameters() if param.requires_grad}
+
+                for name, local_param in current_params.items():
+                    if name in self.global_model_params_start_round:
+                        # Fetch global param and move to local param's device
+                        global_param = self.global_model_params_start_round[name].to(local_param.device)
+
+                        if local_param.shape == global_param.shape:
+                            # Calculate squared L2 norm difference
+                            prox_term_sum += torch.norm(local_param - global_param, p=2)**2
+                        else:
+                            # Optional: Log shape mismatch warning
+                            print(f"[Client {self.client_id} Warn] FedProx: Shape mismatch for '{name}'. Global: {global_param.shape}, Local: {local_param.shape}. Skipping param.")
+                    # else: Param not in global model (e.g., local adaptation layers) - skip.
+
+                # Scale the accumulated sum
+                proximal_term = (0.5 * self.prox_mu) * prox_term_sum
+
+
+            # --- 3. Combine Losses ---
+            total_loss = original_loss + proximal_term
+
+
+            # --- 4. Backward Pass & Optimization Step ---
+            optim.zero_grad()
+
+            if prec == "amp":
+                # Use total_loss for scaling and backward
+                scaler.scale(total_loss).backward()
+                scaler.unscale_(optim) # Unscale before clipping
                 torch.nn.utils.clip_grad_norm_(
                     model.parameters(),
                     max_norm=1.0,
                     error_if_nonfinite=False
                 )
-
+                scaler.step(optim)
+                scaler.update()
+            else:
+                # Use total_loss for backward
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(),
+                    max_norm=1.0,
+                    error_if_nonfinite=False
+                )
                 optim.step()
 
+            # --- 5. Post-step operations ---
             # Track LR changes
             current_lr = optim.param_groups[0]['lr']
+            if not hasattr(self, 'lr_history'): self.lr_history = [] # Initialize if needed
             if not self.lr_history or (current_lr != self.lr_history[-1]):
                 self.lr_history.append(current_lr)
                 print(f"[Client {self.client_id}] LR changed to: {current_lr}")
@@ -666,50 +849,155 @@ class MaPLe(TrainerX):
                     param_norm = p.grad.data.norm(2)
                     total_norm += param_norm.item() ** 2
             total_norm = total_norm ** 0.5
+            if not hasattr(self, 'grad_norms'): self.grad_norms = [] # Initialize if needed
             self.grad_norms.append(total_norm)
 
-            return {"loss": loss.item()}
+            # Return both losses
+            return {"loss": total_loss.item(), "original_loss": original_loss.item()}
 
         except RuntimeError as e:
-            # If non-finite gradients occur
-            if 'non-finite' in str(e).lower():
-                self.nan_count += 1
-                nan_rate = self.nan_count / self.total_batches
-                print(f"[Client {self.client_id}] NaN rate: {nan_rate:.2%}")
-                print(f"Non-finite gradients detected at batch_idx={self.batch_idx}. Skipping batch.")
-                optim.zero_grad()  # Reset the optimizer to avoid corrupted state
-                return {"loss": float('nan')}
-            else:
-                raise  # re-raise if it's not a non-finite error
+            # Ensure nan_count and total_batches are initialized
+            if not hasattr(self, 'nan_count'): self.nan_count = 0
+            # self.total_batches should be incremented regardless of error below
 
+            # If non-finite gradients occur
+            if 'non-finite' in str(e).lower() or 'inf' in str(e).lower() or 'nan' in str(e).lower():
+                self.nan_count += 1
+                nan_rate = self.nan_count / self.total_batches if self.total_batches > 0 else 0
+                # Use self.batch_idx if available, otherwise just mention it happened
+                batch_info = f"batch_idx={self.batch_idx}" if hasattr(self, 'batch_idx') else "current batch"
+                print(f"[Client {self.client_id}] Warning: Non-finite gradients detected at {batch_info}. Skipping batch. Error: {e}")
+                print(f"[Client {self.client_id}] NaN/Inf rate: {nan_rate:.2%}")
+                optim.zero_grad()  # Reset gradients
+                # Return NaN for both losses for consistency
+                return {"loss": float('nan'), "original_loss": float('nan')}
+            else:
+                 # Log the unexpected error along with batch index if possible
+                 batch_info = f"batch_idx={self.batch_idx}" if hasattr(self, 'batch_idx') else "current batch"
+                 print(f"[Client {self.client_id}] Error during forward/backward at {batch_info}: {e}")
+                 raise  # Re-raise other runtime errors
+
+
+
+    def set_global_model_params(self, global_model_state_dict):
+        """
+        Call this method at the beginning of each round
+        to store the received global model parameters.
+        """
+        print(f"[Client {self.client_id}] Storing global model parameters for FedProx.")
+        # Store a deep copy to prevent modifications
+        self.global_model_params_start_round = {
+            name: param.clone().detach() for name, param in global_model_state_dict.items()
+        }
+
+
+    # def run_epoch(self, epoch):
+    #     """
+    #     Called by aggregator for each local epoch.
+    #     This iterates over our train_loader once.
+    #     """
+    #     self.model.train()
+    #     total_loss = 0.0
+    #     total_steps = 0
+
+    #     for batch_idx, batch in enumerate(self.dm.train_loader):
+    #         #print(len(batch["label"].shape))
+    #         self.batch_idx = batch_idx
+    #         loss_dict = self.forward_backward(batch)  # e.g. {"loss": loss_value}
+    #         if "loss" in loss_dict:
+    #             total_loss += loss_dict["loss"]
+    #         total_steps += 1
+
+    #     self.update_lr()
+    #     print("local eval calling self.test")
+    #     local_eval = self.test()  # or some validation method
+    #     local_acc = local_eval["accuracy"] if "accuracy" in local_eval else 0
+
+
+    #     # return average epoch loss
+    #     avg_loss = total_loss / max(1, total_steps)
+    #     print(f"[Client {self.client_id}] Epoch {epoch} done. Loss={avg_loss:.4f}, Acc={local_acc:.2f}%")
+    #     return {"avg_loss": avg_loss}
     def run_epoch(self, epoch):
         """
         Called by aggregator for each local epoch.
-        This iterates over our train_loader once.
+        Iterates over train_loader, handles FedProx loss reporting, and NaNs.
         """
         self.model.train()
-        total_loss = 0.0
-        total_steps = 0
+        total_original_loss = 0.0 # Accumulate the task loss
+        total_combined_loss = 0.0 # Optional: accumulate combined loss too
+        valid_steps = 0           # Count steps with valid (non-NaN) loss
+
+        if self.dm.train_loader is None:
+             print(f"[Client {self.client_id}] Error: train_loader is None.")
+             # Return 0 loss and accuracy, maybe signal error differently
+             return {"avg_loss": 0.0, "accuracy": 0.0}
 
         for batch_idx, batch in enumerate(self.dm.train_loader):
-            #print(len(batch["label"].shape))
-            self.batch_idx = batch_idx
-            loss_dict = self.forward_backward(batch)  # e.g. {"loss": loss_value}
-            if "loss" in loss_dict:
-                total_loss += loss_dict["loss"]
-            total_steps += 1
+            self.batch_idx = batch_idx # Make batch_idx available to forward_backward
 
-        self.update_lr()
-        print("local eval calling self.test")
-        local_eval = self.test()  # or some validation method
-        local_acc = local_eval["accuracy"] if "accuracy" in local_eval else 0
+            # forward_backward now returns {"loss": total_loss, "original_loss": original_loss}
+            # or {"loss": float('nan'), "original_loss": float('nan')} on error
+            loss_dict = self.forward_backward(batch)
+
+            # Check if the dictionary and losses are valid (not None or NaN)
+            # We primarily care about original_loss for accumulation here
+            original_loss_val = loss_dict.get("original_loss", float('nan'))
+            combined_loss_val = loss_dict.get("loss", float('nan')) # Get combined loss if needed
+
+            if loss_dict is not None and not math.isnan(original_loss_val):
+                total_original_loss += original_loss_val
+                # Optionally accumulate combined loss if you want to track it
+                if not math.isnan(combined_loss_val):
+                    total_combined_loss += combined_loss_val
+                valid_steps += 1 # Increment counter only for valid steps
+            else:
+                # Log that a step was skipped due to NaN, if desired
+                 print(f"[Client {self.client_id}] Warning: Skipping batch {batch_idx} in epoch {epoch} due to NaN loss.")
 
 
-        # return average epoch loss
-        avg_loss = total_loss / max(1, total_steps)
-        print(f"[Client {self.client_id}] Epoch {epoch} done. Loss={avg_loss:.4f}, Acc={local_acc:.2f}%")
-        return {"avg_loss": avg_loss}
+        # --- After iterating through all batches ---
 
+        # Update learning rate if scheduler is used
+        if hasattr(self, 'update_lr') and callable(self.update_lr):
+             self.update_lr()
+        # else: print("No update_lr method found") # Optional debug
+
+
+        # --- Local Evaluation ---
+        print(f"[Client {self.client_id}] Epoch {epoch} Training Done ({valid_steps} valid steps). Running local evaluation...")
+        local_eval = {}
+        # Check if test method exists and is callable
+        if hasattr(self, 'test') and callable(self.test):
+            try:
+                # Ensure test() is run with no gradients
+                with torch.no_grad():
+                    local_eval = self.test()
+            except Exception as e:
+                 print(f"[Client {self.client_id}] Error during local evaluation: {e}")
+                 local_eval = {} # Reset eval results on error
+        else:
+             print(f"[Client {self.client_id}] Warning: self.test() method not found. Skipping local evaluation.")
+
+        # Safely get accuracy from evaluation results
+        local_acc = local_eval.get("accuracy", 0.0)
+
+
+        # --- Calculate and Log Average Losses ---
+        # Calculate average based on valid steps to avoid division by zero or skewed results
+        avg_original_loss = total_original_loss / max(1, valid_steps)
+        # Optional: Calculate average combined loss
+        avg_combined_loss = total_combined_loss / max(1, valid_steps)
+
+
+        # Log results - clearly label the reported loss
+        print(f"[Client {self.client_id}] Epoch {epoch} Result: Avg Original Loss={avg_original_loss:.4f}, "
+              f"(Avg Combined Loss={avg_combined_loss:.4f}), Local Acc={local_acc:.2f}%")
+
+
+        # --- Return average *original* epoch loss ---
+        # This is generally more comparable across different FedProx mu values
+        return {"avg_loss": avg_original_loss, "accuracy": local_acc} # Also return accuracy if useful for server
     # def run_epoch(self, epoch):
     #     """
     #     Called by aggregator for each local epoch.

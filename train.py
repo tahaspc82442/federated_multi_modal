@@ -110,9 +110,9 @@ def extend_cfg(cfg):
     # Config for MaPLe
     cfg.TRAINER.MAPLE = CN()
     cfg.TRAINER.MAPLE.N_CTX = 2  # number of context vectors
-    cfg.TRAINER.MAPLE.CTX_INIT = "a photo of a"  # initialization words
+    cfg.TRAINER.MAPLE.CTX_INIT = "a satellite image of a" #"a photo of a"  # initialization words
     cfg.TRAINER.MAPLE.PREC = "fp16"  # fp16, fp32, amp
-    cfg.TRAINER.MAPLE.PROMPT_DEPTH = 9 # Max 12, minimum 0, for 1 it will act as shallow MaPLe (J=1)
+    cfg.TRAINER.MAPLE.PROMPT_DEPTH = 3 #changed from 9 to 2 # Max 12, minimum 0, for 1 it will act as shallow MaPLe (J=1)
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 
     # Config for independent Vision Language prompting (independent-vlp)
@@ -135,9 +135,11 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 # fed change 2
     cfg.FED = CN()
-    cfg.FED.NUM_CLIENTS = 5
-    cfg.FED.NUM_ROUNDS = 30
+    cfg.FED.NUM_CLIENTS = 10
+    cfg.FED.NUM_ROUNDS = 50
     cfg.FED.LOCAL_EPOCHS = 10
+    cfg.PROX_MU= 0.0
+    cfg.FED.NUM_PARTITIONS_PER_DATASET = 10
 
 def setup_cfg(args):
     cfg = get_cfg_default()
@@ -179,14 +181,17 @@ def main(args):
     wandb.init(
     project="my_fed_project",
     entity="mohd-taha82442-iit-bombay",  # <-- Your org name here
-    name="exp13"                      # optional run name
+    name="exp13_my_model_generalization_all_parameters_leanrable_and_pooling_layers_and_depth_3_10_cleint_distribution"                      # optional run name
                         )
 
     trainer = build_trainer(cfg)
 
+    print("After build Trainer YY")
+
     if args.eval_only:
         trainer.load_model(args.model_dir, epoch=args.load_epoch)
-        trainer.test()
+        #trainer.test()
+        trainer.test_on_all_clients() # fed change 3
         return
 
     if not args.no_train:

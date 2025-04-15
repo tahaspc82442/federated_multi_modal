@@ -14,12 +14,12 @@ INPUT:
 
 OPTIM:
   NAME: "sgd"
-  LR: 0.0035
-  MAX_EPOCH : 9
+  LR: 0.0026
+  MAX_EPOCH : 2
   LR_SCHEDULER: "cosine"
   WARMUP_EPOCH: 1
   WARMUP_TYPE: "constant"
-  WARMUP_CONS_LR: 1e-5
+  WARMUP_CONS_LR: 0.0001  #1e-5
 
 TRAIN:
   PRINT_FREQ: 20
@@ -27,10 +27,3 @@ TRAIN:
 MODEL:
   BACKBONE:
     NAME: "ViT-B/16"
-
-TRAINER:
-  MAPLE:
-    N_CTX: 2
-    CTX_INIT: "a photo of a"
-    PREC: "fp16"
-    PROMPT_DEPTH: 9
