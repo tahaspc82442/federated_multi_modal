@@ -1,4 +1,5 @@
-"""Original Train finction"""
+""""Train fubction modified to work with wandb sweep"""
+
 
 import argparse
 import torch
@@ -36,7 +37,9 @@ import trainers.maple
 import trainers.independentVL
 import trainers.vpt
 import trainers.maple_fed  # fed change 1
+import logging 
 
+logger = logging.getLogger(__name__)
 
 def print_args(args, cfg):
     print("***************")
@@ -114,9 +117,9 @@ def extend_cfg(cfg):
     cfg.TRAINER.MAPLE.N_CTX = 2  # number of context vectors
     cfg.TRAINER.MAPLE.CTX_INIT = "a satellite image of a" #"a photo of a"  # initialization words
     cfg.TRAINER.MAPLE.PREC = "fp16"  # fp16, fp32, amp
-    cfg.TRAINER.MAPLE.PROMPT_DEPTH = 3 #changed from 9 to 2 # Max 12, minimum 0, for 1 it will act as shallow MaPLe (J=1)
+    cfg.TRAINER.MAPLE.PROMPT_DEPTH = 6 #changed from 9 to 2 # Max 12, minimum 0, for 1 it will act as shallow MaPLe (J=1)
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
-    cfg.TRAINER.MAPLE.LAMBDA_ALIGN = 0.0    # lambda for alignment loss
+    cfg.TRAINER.MAPLE.LAMBDA_ALIGN = 0.1    # lambda for alignment loss
 
     # Config for independent Vision Language prompting (independent-vlp)
     cfg.TRAINER.IVLP = CN()
@@ -146,65 +149,147 @@ def extend_cfg(cfg):
 
 def setup_cfg(args):
     cfg = get_cfg_default()
-    extend_cfg(cfg)
+    extend_cfg(cfg) # Defines custom params like LAMBDA_ALIGN
 
     # 1. From the dataset config file
     if args.dataset_config_file:
+        logger.info(f"Merging config from dataset file: {args.dataset_config_file}")
         cfg.merge_from_file(args.dataset_config_file)
 
     # 2. From the method config file
     if args.config_file:
+        logger.info(f"Merging config from method file: {args.config_file}")
         cfg.merge_from_file(args.config_file)
 
-    # 3. From input arguments
+    # 3. From input arguments (like --seed, --output-dir etc.)
     reset_cfg(cfg, args)
 
-    # 4. From optional input arguments
-    cfg.merge_from_list(args.opts)
+    # 4. Preprocess and merge optional input arguments from args.opts
+    #    Handles both 'KEY VALUE' and '--KEY=VALUE' formats.
+    if args.opts:
+        logger.info(f"Processing command line opts: {args.opts}")
+        processed_opts = []
+        i = 0
+        while i < len(args.opts):
+            opt = args.opts[i]
+            if opt.startswith("--"):
+                # Handle '--KEY=VALUE' format (from wandb agent ${args})
+                if "=" in opt:
+                    key_value = opt.lstrip("-").split("=", 1)
+                    if len(key_value) == 2:
+                        key, value = key_value
+                        processed_opts.extend([key, value])
+                        logger.debug(f"  Processed '--key=value': {key} = {value}")
+                        i += 1
+                    else:
+                        logger.warning(f"  Skipping incorrectly formatted '--key=value' argument: {opt}")
+                        i += 1
+                else:
+                    # Handle '--key' potentially followed by 'value' (less common for opts, but possible)
+                    # Or flags like '--eval-only' if they accidentally end up in opts
+                    key = opt.lstrip("-")
+                    # Check if next arg exists and doesn't start with '-' (likely the value)
+                    if i + 1 < len(args.opts) and not args.opts[i+1].startswith("-"):
+                        value = args.opts[i+1]
+                        processed_opts.extend([key, value])
+                        logger.debug(f"  Processed '--key value': {key} = {value}")
+                        i += 2
+                    else:
+                        # Treat as a boolean flag maybe? Or just skip? Skipping is safer.
+                        logger.warning(f"  Skipping flag-like argument or key without value found in opts: {opt}")
+                        i += 1
+            else:
+                # Handle 'KEY VALUE' format
+                key = opt
+                if i + 1 < len(args.opts):
+                    value = args.opts[i+1]
+                    processed_opts.extend([key, value])
+                    logger.debug(f"  Processed 'key value': {key} = {value}")
+                    i += 2
+                else:
+                    logger.error(f"  Error: Option key '{key}' found at the end of opts list is missing a value.")
+                    # Decide whether to raise error or just warn and continue
+                    # raise ValueError(f"Option key '{key}' needs a value.")
+                    i += 1 # Increment to avoid infinite loop
+
+        # Final check: Ensure the processed list has pairs
+        if len(processed_opts) % 2 != 0:
+            logger.error(f"Processed options list has an odd number of elements: {processed_opts}. Configuration might be incorrect.")
+            # Decide whether to raise an error or proceed cautiously
+            # raise ValueError(f"Processed override list has odd length: {processed_opts}")
+        else:
+            logger.info(f"Merging processed opts: {processed_opts}")
+            cfg.merge_from_list(processed_opts)
 
     cfg.freeze()
-
     return cfg
+# ****** END OF MODIFIED FUNCTION ******
 
 
 def main(args):
-    cfg = setup_cfg(args)
+    cfg = setup_cfg(args) # This now calls the modified setup_cfg
     if cfg.SEED >= 0:
         print("Setting fixed seed: {}".format(cfg.SEED))
         set_random_seed(cfg.SEED)
+    # Initialize logger *after* output dir might be set by config
     setup_logger(cfg.OUTPUT_DIR)
+
+    # Log effective args and config *after* logger is set up
+    logger.info("***** Effective Arguments *****")
+    optkeys = list(args.__dict__.keys())
+    optkeys.sort()
+    for key in optkeys:
+        logger.info("{}: {}".format(key, args.__dict__[key]))
+    logger.info("***** Effective Config *****")
+    logger.info(f"\n{cfg}")
+
 
     if torch.cuda.is_available() and cfg.USE_CUDA:
         torch.backends.cudnn.benchmark = True
 
-    print_args(args, cfg)
-    print("Collecting env info ...")
-    print("** System info **\n{}\n".format(collect_env_info()))
+    # print_args(args, cfg) # Logging above replaces this
+    logger.info("Collecting env info ...")
+    logger.info("** System info **\n{}\n".format(collect_env_info()))
 
+    # Check if WANDB entity/project are set (e.g., via env vars or config)
+    # You might want to make project/entity configurable via cfg too
+    wandb_project = "my_fed_project"
+    wandb_entity = "mohd-taha82442-iit-bombay"
+    run_name = "exp15_my_model_generalization_all_parameters_leanrable_and_pooling_layers_and_depth_3_10_cleint_distribution_depth_6" # Consider making name dynamic or pass via opts
+
+    # Initialize wandb - ensure config passed contains the final merged values
+    # Passing dictionary version of cfg makes it easily viewable in W&B UI
     wandb.init(
-    project="my_fed_project",
-    entity="mohd-taha82442-iit-bombay",  # <-- Your org name here
-    name="exp16_my_model_generalization_all_parameters_leanrable_and_pooling_layers_and_depth_3_10_ablation_1"                      # optional run name
-                        )
+        project=wandb_project,
+        entity=wandb_entity,
+        name=run_name,
+        config=cfg # Pass the finalized config object (wandb converts it)
+    )
+    logger.info(f"Wandb run initialized: {wandb.run.get_url()}")
 
+    # Now build trainer with the finalized config
     trainer = build_trainer(cfg)
-
-    print("After build Trainer YY")
+    logger.info("Trainer built successfully.")
 
     if args.eval_only:
+        logger.info("Starting evaluation only.")
         trainer.load_model(args.model_dir, epoch=args.load_epoch)
-        #trainer.test()
         trainer.test_on_all_clients() # fed change 3
+        logger.info("Evaluation finished.")
         return
 
     if not args.no_train:
+        logger.info("Starting training.")
         trainer.train()
+        logger.info("Training finished.")
 
-    
+    # Ensure wandb finishes syncing
+    wandb.finish()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    # ... [argparse arguments remain the same] ...
     parser.add_argument("--root", type=str, default="", help="path to dataset")
     parser.add_argument("--output-dir", type=str, default="", help="output directory")
     parser.add_argument(
@@ -254,7 +339,14 @@ if __name__ == "__main__":
         "opts",
         default=None,
         nargs=argparse.REMAINDER,
-        help="modify config options using the command-line",
+        help="modify config options using the command-line (KEY VALUE pairs or --KEY=VALUE)",
     )
+
     args = parser.parse_args()
+
+    # Note: Logger setup is moved inside main() after potential config changes
+    # But basic logging like this might be useful for very early errors
+    print(f"Starting script with provided args: {args}")
+
     main(args)
+    print("Script finished.")

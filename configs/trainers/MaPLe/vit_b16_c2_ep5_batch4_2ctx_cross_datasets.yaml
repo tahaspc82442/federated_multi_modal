@@ -34,3 +34,4 @@ TRAINER:
     CTX_INIT: "a photo of a"
     PREC: "fp16"
     PROMPT_DEPTH: 11
+    LAMBDA_ALIGN: 0.0

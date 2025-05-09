@@ -231,6 +231,7 @@ class CustomCLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         self.dtype = clip_model.dtype
         self.clip_model2 = clip_model
+        self.lamda_align =cfg.TRAINER.MAPLE.LAMBDA_ALIGN   # added line one modification
         
 
     def print_info(self, var, name):
@@ -380,7 +381,7 @@ class CustomCLIP(nn.Module):
                 alignment_loss = 1 - cos_sim.mean()
                 
                 # Combined loss
-                lambda_align = 0.5
+                lambda_align = self.lamda_align  # added line TWO modification
                 total_loss = loss + lambda_align * alignment_loss
                 
                 # Final NaN check
