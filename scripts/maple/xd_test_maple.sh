@@ -31,4 +31,25 @@ else
     --model-dir output/${TRAINEDON}/MaPLeFederated/${CFG}_${SHOTS}shots/seed${SEED} \
     --load-epoch ${EP} \
     --eval-only
+    
+    # Generate t-SNE visualization with the pre-trained model
+    TSNE_DIR=${DIR}/tsne_plots
+    mkdir -p ${TSNE_DIR}
+    
+    echo "Generating t-SNE plots in ${TSNE_DIR}"
+    
+    python test_model.py \
+    --model-dir output/${TRAINEDON}/MaPLeFederated/${CFG}_${SHOTS}shots/seed${SEED} \
+    --load-epoch ${EP} \
+    --trainer MaPLeFederatedTester \
+    --config-file configs/trainers/MaPLeFed/${DATASET}.yaml \
+    --generate-tsne-plot \
+    --tsne-output-file ${TSNE_DIR}/${DATASET}_tsne.png \
+    --tsne-perplexity 40.0 \
+    --tsne-max-samples 3000 \
+    --tsne-high-res \
+    --tsne-individual-plots \
+    --tsne-show-hulls \
+    --tsne-annotate-confidence \
+    DATASET.NAME ${DATASET}
 fi

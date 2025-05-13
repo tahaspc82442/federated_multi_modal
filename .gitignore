@@ -1,7 +1,8 @@
 # Ignore all .zip files
 
-# Ignore all files in an output directory
-
+# Ignore all files in an output director
+/wandb/*
+/artifacts/*
 /mixed/*
 /output/*
 /debug_samples/*

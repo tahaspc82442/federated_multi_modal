@@ -231,7 +231,7 @@ class CustomCLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         self.dtype = clip_model.dtype
         self.clip_model2 = clip_model
-        self.lamda_align =cfg.TRAINER.MAPLE.LAMBDA_ALIGN   # added line one modification
+        self.lamda_align =0.5   # added line one modification
         
 
     def print_info(self, var, name):
@@ -249,63 +249,6 @@ class CustomCLIP(nn.Module):
                 print(f"[DEBUG] NaN detected in {name}")
             if torch.isinf(tensor).any():
                 print(f"[DEBUG] Inf detected in {name}")
-
-    """def forward(self, image, label=None, caption=None, return_feature=False):  original forward function
-        #print("caption", caption)
-        tokenized_captions= clip.tokenize(caption).to("cuda") if caption else None
-        with torch.no_grad():
-            embedding_caption = self.clip_model2.token_embedding(tokenized_captions).type(self.dtype) if tokenized_captions is not None and tokenized_captions.numel() > 0 else None
-
-        #if tokenized_captions is not None and tokenized_captions.numel() > 0:
-            #print("Caption embedding shape", embedding_caption.size())
-        tokenized_prompts = self.tokenized_prompts
-        #self.print_info(tokenized_prompts, "tokenized_prompts")
-
-        logit_scale = self.logit_scale.exp()
-        #print(f"logit_scale: value={logit_scale.item()}")
-
-        prompts, shared_ctx, deep_compound_prompts_text, deep_compound_prompts_vision = self.prompt_learner()
-
-        text_features = self.text_encoder(prompts, tokenized_prompts, deep_compound_prompts_text)
-        image_features = self.image_encoder(image.type(self.dtype), shared_ctx, deep_compound_prompts_vision, embedding_caption)
-
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-
-        #print("Image feature dim", image_features.size())
-        #print("Text feature dimensions", text_features.size())
-        
-        #if label is not None:
-            #print("label is", label)
-            #print("length of label",len(label))
-            #print("label[0] is ",label[0])
-            #print("text fature label[0]", text_features[label].size())
-            #print()
-
-
-        logits = logit_scale * image_features @ text_features.t()
-
-        if self.prompt_learner.training:
-            if label is not None and isinstance(label, torch.Tensor) and label.dtype == torch.float:
-                log_probs = F.log_softmax(logits, dim=1)
-                target_probs = label
-                loss = F.kl_div(log_probs, target_probs, reduction='batchmean')
-                text_features_for_images = label @ text_features                
-            else:
-                loss = F.cross_entropy(logits, label)
-                text_features_for_images = text_features[label]
-        
-            alignment_loss = 1-F.cosine_similarity(image_features, text_features_for_images).mean()
-            lambda_align = 0.5
-            total_loss = loss + lambda_align * alignment_loss
-            
-            return total_loss
-            # made changes from return logits
-        if return_feature:
-            return logits, image_features
-        else:
-            return logits"""
-        
 
     def forward(self, image, label=None, caption=None, return_feature=False):
         # Sanitize caption input
@@ -389,8 +332,11 @@ class CustomCLIP(nn.Module):
                     raise RuntimeError("NaN/Inf in total loss")
                     
                 return total_loss
-            #print("returning only")
-            #print(label)
+            
+            # Check if we need to return features for t-SNE or similar analysis
+            if return_feature:
+                return logits, image_features
+            
             return logits  # Return logits for evaluation
     
 
@@ -595,11 +541,11 @@ class MaPLe(TrainerX):
         """Convert the incoming batch into the required inputs."""
         x = batch["img"]    # images
         y = batch["label"]  # labels
-        c = batch["caption"]  # text or other meta
+        #c = batch["caption"]  # text or other meta
         x = x.to(self.device)
         y = y.to(self.device)
         # c might remain on CPU if it's text, depending on your usage
-        return x, y, c
+        return x, y
 
     def forward_backward(self, batch):
         """
@@ -796,7 +742,8 @@ class MaPLe(TrainerX):
         with torch.no_grad():
             loader = self.dm.test_loader
             for batch in loader:
-                x, y, c = self.parse_batch_train(batch)
+                # x, y, c = self.parse_batch_train(batch)
+                x, y = self.parse_batch_train(batch)
                 
                 # Forward pass for classification
                 outputs = self.model(x)# presumably returns logits
