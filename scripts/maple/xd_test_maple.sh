@@ -4,7 +4,7 @@
 
 # custom config
 DATA=/raid/biplab/taha
-TRAINER=MaPLe
+TRAINER=DualPrompt
 
 DATASET=$1
 SEED=$2
@@ -15,7 +15,7 @@ CFG=vit_b16_c2_ep5_batch4_2ctx_cross_datasets
 SHOTS=16
 
 #DIR=output/evaluation/${TRAINER}/${CFG}_${SHOTS}shots/${DATASET}/seed${SEED}
-DIR=output/evaluation/MaPLeFederated/${CFG}_${SHOTS}shots/${DATASET}/seed${SEED}
+DIR=output/evaluation/DualPromptFL/${CFG}_${SHOTS}shots/${DATASET}/seed${SEED}
 if [ -d "$DIR" ]; then
     echo "Results are available in ${DIR}. Skip this job"
 else
@@ -28,7 +28,7 @@ else
     --dataset-config-file configs/datasets/${DATASET}.yaml \
     --config-file configs/trainers/${TRAINER}/${CFG}.yaml \
     --output-dir ${DIR} \
-    --model-dir output/${TRAINEDON}/MaPLeFederated/${CFG}_${SHOTS}shots/seed${SEED} \
+    --model-dir output/${TRAINEDON}/DualPromptFL/${CFG}_${SHOTS}shots/seed${SEED} \
     --load-epoch ${EP} \
     --eval-only
 fi

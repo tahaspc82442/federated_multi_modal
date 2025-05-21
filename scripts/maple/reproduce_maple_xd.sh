@@ -4,7 +4,7 @@
 
 # custom config
 DATA="/path/to/dataset/folder"
-TRAINER=MaPLe
+TRAINER=DualPrompt
 
 DATASET=$1
 SEED=$2
