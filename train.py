@@ -134,9 +134,9 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
 # fed change 2
     cfg.FED = CN()
-    cfg.FED.NUM_CLIENTS = 10
-    cfg.FED.NUM_ROUNDS = 50
-    cfg.FED.LOCAL_EPOCHS = 10
+    cfg.FED.NUM_CLIENTS = 5
+    cfg.FED.NUM_ROUNDS = 6
+    cfg.FED.LOCAL_EPOCHS = 6
     cfg.PROX_MU= 0.0
     cfg.FED.NUM_PARTITIONS_PER_DATASET = 10
 
@@ -180,7 +180,7 @@ def main(args):
     wandb.init(
     project="my_fed_project",
     entity="mohd-taha82442-iit-bombay",  # <-- Your org name here
-    name="exp16_my_model_generalization_all_parameters_leanrable_and_pooling_layers_and_depth_3_10_ablation_1"                      # optional run name
+    name="Dualprompt_2_no_fl"                      # optional run name
                         )
 
     trainer = build_trainer(cfg)
@@ -190,7 +190,7 @@ def main(args):
     if args.eval_only:
         trainer.load_model(args.model_dir, epoch=args.load_epoch)
         #trainer.test()
-        trainer.test_on_all_clients() # fed change 3
+        trainer.test_on_unified_dataset_eval_only() # fed change 3
         return
 
     if not args.no_train:

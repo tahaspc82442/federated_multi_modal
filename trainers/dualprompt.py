@@ -412,7 +412,6 @@ class DualPrompt(TrainerX):
         self.nan_count = 0
         self.total_batches = 0
         self.classnames= classnames
-
         super().__init__(cfg)
 
         # For debugging LR/grad norms
@@ -426,6 +425,8 @@ class DualPrompt(TrainerX):
         # If you want to verify trainable params *after* build_model(),
         # do it at the end of build_model. Doing it here is before
         # the model actually exists.
+
+    
 
     def check_cfg(self, cfg):
         """Check that precision config is valid."""

@@ -1279,3 +1279,20 @@ class DualPromptFL(TrainerX):
         else:
              print("ERROR: Client 0 does not have a standard 'test' method to call.")
              return None
+        
+    def test_on_unified_dataset_eval_only(self):
+        """
+        Convenience method for train.py to evaluate on the unified dataset.
+        This method creates the unified test dataloader and calls test_on_unified_dataset.
+        """
+        print("\n=== Running evaluation on unified test dataset ===")
+        # Create the unified test dataloader
+        unified_test_loader = self.create_unified_test_dataloader()
+        
+        if unified_test_loader:
+            # Call the test_on_unified_dataset method with the created loader
+            results = self.test_on_unified_dataset(unified_test_loader)
+            return results
+        else:
+            print("ERROR: Failed to create unified test dataloader.")
+            return None

@@ -4,7 +4,7 @@
 
 # custom config
 DATA=/raid/biplab/taha
-TRAINER=DualPromptFL
+TRAINER=DualPrompt
 
 DATASET=$1
 SEED=$2
