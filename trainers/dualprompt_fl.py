@@ -1079,7 +1079,7 @@ class DualPromptFL(TrainerX):
             directory = self.cfg.OUTPUT_DIR
         mkdir_if_missing(directory)
 
-        subfolder = "MultiModalPromptLearner_Aggregator"
+        subfolder = "DualPromptPromptLearner_Aggregator"
         target_dir = osp.join(directory, subfolder)
         mkdir_if_missing(target_dir)
 
@@ -1136,7 +1136,7 @@ class DualPromptFL(TrainerX):
             print("Skipping load_model, no pretrained path given")
             return
 
-        subfolder = "MultiModalPromptLearner_Aggregator"
+        subfolder = "DualPromptPromptLearner_Aggregator"
         model_file = f"model.pth.tar-{epoch}" if epoch else "model.pth.tar"
         path = osp.join(directory, subfolder, model_file)
         

@@ -29,12 +29,8 @@ import datasets.imagenet_r
 import datasets.patternnet
 import datasets.ucmerced
 import datasets.patternnet
-import trainers.coop
-import trainers.cocoop
-import trainers.zsclip
+
 import trainers.dualprompt
-import trainers.independentVL
-import trainers.vpt
 import trainers.dualprompt_fl  # fed change 1
 
 

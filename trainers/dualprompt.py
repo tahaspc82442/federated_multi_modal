@@ -78,7 +78,7 @@ class TextEncoder(nn.Module):
 
         return x
 
-class MultiModalPromptLearner(nn.Module):
+class DualPromptPromptLearner(nn.Module):
     def __init__(self, cfg, classnames, clip_model):
         super().__init__()
         n_cls = len(classnames)
@@ -224,7 +224,7 @@ class CustomCLIP(nn.Module):
         super().__init__()
         print(len(classnames))
         print("these classnames clip got", classnames)
-        self.prompt_learner = MultiModalPromptLearner(cfg, classnames, clip_model)
+        self.prompt_learner = DualPromptPromptLearner(cfg, classnames, clip_model)
         self.tokenized_prompts = self.prompt_learner.tokenized_prompts
         self.image_encoder = clip_model.visual
         self.text_encoder = TextEncoder(clip_model)
@@ -556,7 +556,7 @@ class DualPrompt(TrainerX):
         self.sched = build_lr_scheduler(self.optim, cfg.OPTIM)
 
         # 7) Register model for Dassl's saving mechanism
-        unique_key = f"MultiModalPromptLearner_{self.client_id}"
+        unique_key = f"DualPromptPromptLearner_{self.client_id}"
         if unique_key not in self._models:
             self.register_model(unique_key, self.model, self.optim, self.sched)
 
