@@ -367,7 +367,7 @@ class Transformer(nn.Module):
                                              else ResidualAttentionBlock_IVLP(width, heads, attn_mask, False,
                                                                               text_layer, i, design_details)
                                              for i in range(layers)])
-        elif current_trainer == 'DualPrompt':
+        elif current_trainer == 'DualPrompt' or current_trainer == 'DualPromptCentralized':
             self.resblocks = nn.Sequential(
                 *[ResidualAttentionBlock_MaPLe(width, heads, attn_mask, design_details, text_layer, i)
                   for i in range(layers)])
@@ -607,7 +607,7 @@ class CLIP(nn.Module):
             )
         else:
             vision_heads = vision_width // 64
-            if trainer == "DualPrompt":
+            if trainer == "DualPrompt" or trainer == "DualPromptCentralized":
                 self.visual = VisionTransformer_MaPLe(
                     input_resolution=image_resolution,
                     patch_size=vision_patch_size,

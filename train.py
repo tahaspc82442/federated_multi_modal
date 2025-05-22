@@ -32,7 +32,7 @@ import datasets.patternnet
 
 import trainers.dualprompt
 import trainers.dualprompt_fl  # fed change 1
-
+import trainers.dualprompt_centralized
 
 def print_args(args, cfg):
     print("***************")
@@ -114,6 +114,15 @@ def extend_cfg(cfg):
     cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
     cfg.TRAINER.DUALPROMPT.LAMBDA_ALIGN = 0.0    # lambda for alignment loss
 
+    # Config for DualPromptCentralized
+    cfg.TRAINER.DUALPROMPTCENTRALIZED = CN()
+    cfg.TRAINER.DUALPROMPTCENTRALIZED.N_CTX = 2  # number of context vectors
+    cfg.TRAINER.DUALPROMPTCENTRALIZED.CTX_INIT = "a satellite image of a" #"a photo of a"  # initialization words
+    cfg.TRAINER.DUALPROMPTCENTRALIZED.PREC = "fp16"  # fp16, fp32, amp
+    cfg.DATASET.SUBSAMPLE_CLASSES = "all"  # all, base or new
+    cfg.TRAINER.DUALPROMPTCENTRALIZED.PROMPT_DEPTH = 3
+    cfg.TRAINER.DUALPROMPTCENTRALIZED.LAMBDA_ALIGN = 0.5   # lambda for alignment loss
+
     # Config for independent Vision Language prompting (independent-vlp)
     cfg.TRAINER.IVLP = CN()
     cfg.TRAINER.IVLP.N_CTX_VISION = 2  # number of context vectors at the vision branch
@@ -187,10 +196,12 @@ def main(args):
 
     print("After build Trainer YY")
 
-    if args.eval_only:
+    if args.eval_only and cfg.TRAINER.NAME == "DualPromptCentralized":
         trainer.load_model(args.model_dir, epoch=args.load_epoch)
-        #trainer.test()
-        trainer.test_on_unified_dataset_eval_only() # fed change 3
+        trainer.test() 
+    elif args.eval_only:
+        trainer.load_model(args.model_dir, epoch=args.load_epoch)
+        trainer.test_on_unified_dataset_eval_only()
         return
 
     if not args.no_train:
