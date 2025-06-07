@@ -2,7 +2,7 @@
 
 This repository contains the official implementation for **DualPrompt**, a novel approach for adapting large-scale Vision-Language (V-L) models for satellite image classification. The project features implementations for both standard centralized and privacy-preserving federated learning setups.
 
-![DualPrompt Architecture](https://raw.githubusercontent.com/taha-abbas/dual-prompt/main/assets/model3.png)
+![DualPrompt Architecture](./model_image.svg)
 *Overview of the DualPrompt architecture with inter-branch communication.*
 
 ---
