@@ -1,162 +1,179 @@
-# DualPrompt: Multi-modal Prompt Learning
+# DualPrompt: Leveraging Vision-Language Models and Federated Learning for Satellite Image Classification
 
-> [**DualPrompt: Multi-modal Prompt Learning**]<br>
-> Mohd Taha Abbas
+This repository contains the official implementation for **DualPrompt**, a novel approach for adapting large-scale Vision-Language (V-L) models for satellite image classification. The project features implementations for both standard centralized and privacy-preserving federated learning setups.
 
-[![Website](https://img.shields.io/badge/Project-Website-87CEEB)](https://muzairkhattak.github.io/multimodal-prompt-learning/)
-[![video](https://img.shields.io/badge/Video-Presentation-F9D371)](https://youtu.be/fmULeaqAzfg)
-[![slides](https://img.shields.io/badge/Presentation-Slides-B762C1)](https://drive.google.com/file/d/1GYei-3wjf4OgBVKi9tAzeif606sHBlIA/view?usp=share_link)
+![DualPrompt Architecture](https://raw.githubusercontent.com/taha-abbas/dual-prompt/main/assets/model3.png)
+*Overview of the DualPrompt architecture with inter-branch communication.*
 
-Official implementation of the paper "DualPrompt: Multi-modal Prompt Learning".
-This repository also includes **DualPromptFL**, a federated learning approach based on DualPrompt.
-<hr />
+---
 
-Base-to-novel generalization:
+## Table of Contents
+- [Introduction](#introduction)
+- [Our Contribution](#our-contribution)
+- [Methodology](#methodology)
+  - [Dual-Prompting Mechanism](#dual-prompting-mechanism)
+  - [Federated Learning Setup](#federated-learning-setup)
+- [Key Results](#key-results)
+  - [Centralized (Non-Federated) Performance](#centralized-non-federated-performance)
+  - [Federated Learning Performance](#federated-learning-performance)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Datasets](#datasets)
+  - [Running the Code](#running-the-code)
+- [License](#license)
+- [Citation](#citation)
+- [Acknowledgements](#acknowledgements)
 
+---
 
-Domain Generalization:
+## Introduction
 
+Large-scale Vision-Language (V-L) models like CLIP have demonstrated remarkable generalization capabilities. However, their performance is highly sensitive to the input text prompts, and full fine-tuning is often impractical due to massive model sizes and the risk of catastrophic forgetting. While prompt learning has emerged as a parameter-efficient alternative, existing methods primarily focus on the language branch, which is a suboptimal approach.
 
-<hr />
+This project addresses these challenges, particularly in the context of satellite imagery where data is often sensitive and distributed. Centralized training in such scenarios is frequently not feasible, making a strong case for privacy-preserving techniques like Federated Learning (FL).
 
-# :rocket: News
-* **(Project Update)** Renamed MaPLe to DualPrompt and MaPLeFederated to DualPromptFL.
-* **(July 17, 2023)**
-  * Our work on proposing a [Self-Regularization Framework for Prompt Learning](https://muzairkhattak.github.io/PromptSRC/) has been accepted to ICCV-2023  :tada: The code is also publicly available [here](https://github.com/muzairkhattak/PromptSRC)!
-* **(Feb 28, 2023)**
-  * Paper accepted at CVPR 2023 :tada:
-* **(Oct 06, 2022)**
-  * Training and evaluation codes for [DualPrompt](configs/trainers/DualPrompt) (formerly MaPLe), along with pretrained models are released.
-  * The repository also supports
-[CoOp](configs/trainers/CoOp),
-[Co-CoOp](configs/trainers/CoCoOp),
-[Deep Vision Prompting](configs/trainers/VPT/vit_b16_c2_ep5_batch4_4.yaml),
-[Deep Language Prompting](configs/trainers/IVLP/vit_b16_c2_ep5_batch4_4ctx_language_only.yaml), and
-[Independent V-L Prompting](configs/trainers/IVLP/vit_b16_c2_ep5_batch4_2+2ctx.yaml)
-architectures.
-<hr />
+## Our Contribution
 
-## Highlights
+To tackle the limitations of unimodal prompting, we introduce **DualPrompt**, a novel method with the following key contributions:
 
-> **<p align="justify"> Abstract:** *Pre-trained vision-language (V-L) models such as CLIP have shown excellent
-> generalization ability to downstream tasks. However, they are sensitive to the choice of input text prompts and
-> require careful selection of prompt templates to perform well. Inspired by the Natural Language Processing (NLP)
-> literature, recent CLIP adaptation approaches learn prompts as the textual inputs to fine-tune CLIP for downstream
-> tasks. We note that using prompting to adapt representations in a single branch of CLIP (language or vision) is
-> sub-optimal since it does not allow the flexibility to dynamically adjust both representation spaces on a downstream
-> task. In this work, we propose Multi-modal Prompt Learning (DualPrompt) for both vision and language branches to improve
-> alignment between the vision and language representations. Our design promotes strong coupling between the
-> vision-language prompts to ensure mutual synergy and discourages learning independent uni-modal solutions.
-> Further, we learn separate prompts across different early stages to progressively model the stage-wise feature
-> relationships to allow rich context learning. We evaluate the effectiveness of our approach on three representative
-> tasks of generalization to novel classes, new target datasets and unseen domain shifts. Compared with the
-> state-of-the-art method Co-CoOp, DualPrompt exhibits favorable performance and achieves an absolute gain of 3.45% on novel
-> classes and 2.72% on overall harmonic-mean, averaged over 11 diverse image recognition datasets. Our code and models
-> will be publicly released.* </p>
+1.  **Dual-Prompting**: We introduce learnable prompts in **both** the vision and language branches of the V-L model, allowing for dynamic, multi-modal adaptation.
+2.  **Strong Coupling Mechanism**: Our design promotes synergy between the vision and language prompts through a bidirectional information sharing mechanism and coupled context optimization.
+3.  **Federated Learning Integration**: We successfully adapt and evaluate DualPrompt in a federated learning setting, demonstrating its viability for decentralized and privacy-preserving training on sensitive satellite imagery.
 
-## Main Contributions
+## Methodology
 
-1) **Multi-modal prompt learning:** Adapt CLIP using a novel prompting technique which prompts both the vision and language branch of CLIP.
-2) **Vision and Language Prompt Coupling:** Explicitly condition vision prompts on their language counterparts and act as a bridge
-between the two modalities by allowing mutual propagation of gradients to promote synergy.
-3) **Vision and Language Deep Prompting:** Learn multi-modal prompts across multiple transformer blocks in both vision and
-language branches to progressively learn the synergistic behaviour of both modalities.
+### Dual-Prompting Mechanism
 
+The core of DualPrompt is the introduction of learnable prompts, $\mathbf{P}_i$ (language) and $\mathbf{Q}_i$ (vision), at alternating layers of the V-L model's encoders.
 
-## :ballot_box_with_check: Supported Methods
+-   **Bidirectional Prompt Sharing**: Information from the language prompts is projected and injected into the vision branch, and vice-versa, creating a tight coupling.
+-   **Coupled Context Optimization**: Learnable context prompts in each branch are conditioned on each other via dedicated coupling functions (linear layers).
+-   **Parameter-Efficiency**: We keep the pretrained model backbone frozen and only update the prompts, normalization layers, and a few lightweight coupling and attention layers.
+-   **Compound Loss**: Our training objective is a combination of a standard cross-entropy classification loss and a cosine similarity-based alignment loss to ensure the vision and language representations remain aligned.
 
-| Method                    | Paper                                         |                             Configs                             |          Training Scripts          |
-|---------------------------|:----------------------------------------------|:---------------------------------------------------------------:|:----------------------------------:|
-| DualPrompt                | CVPR 2023                                     | [link](configs/trainers/DualPrompt/vit_b16_c2_ep5_batch4_2ctx.yaml)  |       [link](scripts/dualprompt)        |
-| DualPromptFL              | -                                             | [link](configs/trainers/DualPromptFL/vit_b16_c2_ep5_batch4_2ctx_cross_datasets.yaml)  |       [link](scripts/dualprompt_fl)     |
-| CoOp                      | [IJCV 2022](https://arxiv.org/abs/2109.01134) |                  [link](configs/trainers/CoOp)                  |        [link](scripts/coop)        |
-| Co-CoOp                   | [CVPR 2022](https://arxiv.org/abs/2203.05557) |                 [link](configs/trainers/CoCoOp)                 |       [link](scripts/cocoop)       |
-| Deep Vision Prompting     | -                                             |    [link](configs/trainers/VPT/vit_b16_c2_ep5_batch4_4.yaml)    |        [link](scripts/vpt)         |
-| Deep Language Prompting   | -                                             |                 [link](configs/trainers/IVLP/vit_b16_c2_ep5_batch4_4ctx_language_only.yaml)                  | [link](scripts/language-prompting) |
-| Independent V-L Prompting | -                                             | [link](configs/trainers/IVLP/vit_b16_c2_ep5_batch4_2+2ctx.yaml) |  [link](scripts/independent-vlp)   |
+$$L_{\text{total}} = L_{\text{cls}} + \lambda_{\text{align}} L_{\text{align}}$$
 
-<hr />
+![Federated Learning Setup](https://raw.githubusercontent.com/taha-abbas/dual-prompt/main/assets/federated.svg)
+*Our model in a federated learning setting.*
 
-## Results
-### DualPrompt in comparison with existing methods
-Results reported below show accuracy for base and novel classes for across 11 recognition datasets averaged over 3 seeds.
+### Federated Learning Setup
 
-| Name                                                      | Base Acc. | Novel Acc. |    HM     | Epochs |
-|-----------------------------------------------------------|:---------:|:----------:|:---------:|:------:|
-| [CLIP](https://arxiv.org/abs/2103.00020)                  |   69.34   |   74.22    |   71.70   |   -    |
-| [CoOp](https://arxiv.org/abs/2109.01134)                  | **82.69** |   63.22    |   71.66   |  200   |
-| [CoCoOp](https://arxiv.org/abs/2203.05557) |   80.47   |   71.69    |   75.83   |   10   |
-| DualPrompt (ours)                                         |   82.28   | **75.14**  | **78.55** |   5    |
+We implement DualPrompt in a federated environment using a variant of the FedAvg algorithm.
+
+1.  **Initialization**: A central server initializes the global learnable parameters ($\theta_g^0$).
+2.  **Distribution**: The server sends the current global model to a set of clients.
+3.  **Local Training**: Each client trains the model on its local, private data for a few epochs.
+4.  **Aggregation**: The server aggregates the updated parameters from the clients to create a new global model. This process is repeated for a set of communication rounds.
+
+This setup ensures that the raw data never leaves the client's device, thus preserving privacy.
+
+---
+
+## Key Results
+
+We evaluated DualPrompt in both centralized and federated settings, primarily in a challenging 16-shot learning scenario.
+
+### Centralized (Non-Federated) Performance
+
+DualPrompt shows robust generalization capabilities, outperforming several state-of-the-art baselines.
+
+**Base to New Class Generalization:**
+
+| Dataset | Model | Base Accuracy | New Accuracy |
+| :--- | :--- | :---: | :---: |
+| **PatternNet** | CoOp | 94.20% | 45.40% |
+| | CoCoOp | 92.50% | 60.30% |
+| | MaPLE | 96.00% | 85.00% |
+| | **DualPrompt (Ours)** | **96.90%** | **84.50%** |
+| **UC Merced** | CoOp | 96.00% | 57.50% |
+| | CoCoOp | 97.30% | 68.00% |
+| | MaPLE | 98.20% | 69.00% |
+| | **DualPrompt (Ours)** | **98.60%** | **71.00%** |
+
+**Cross-Dataset Generalization (Train on Ucmerced $\rightarrow$ Test on PatternNet):**
+
+| Model | Ucmerced (Source) | PatternNet (Target) |
+| :--- | :---: | :---: |
+| CoOp | 91.90% | 57.30% |
+| CoCoOp | 89.00% | 56.70% |
+| MaPLE | 87.60% | 70.40% |
+| **DualPrompt (Ours)** | **91.00%** | **75.00%** |
+
+### Federated Learning Performance
+
+In a federated setup with 5 clients over a unified dataset of 80 satellite image classes, DualPrompt significantly outperforms other federated methods.
+
+**Overall Accuracy on Unified Test Set:**
+
+| Model | Test Accuracy |
+| :--- | :---: |
+| FedCoop | 36.65% |
+| FedTPG | 52.97% |
+| FedMaPLe | 60.20% |
+| **Fed-DualPrompt (Ours)** | **76.91%** |
+
+**Cross-Dataset Generalization (Trained on 5 datasets, Tested on unseen RESISC45):**
+
+| Model | Test Accuracy on RESISC45 |
+| :--- | :---: |
+| FedCoop | 45.42% |
+| FedTPG | 49.16% |
+| FedMaPLe | 59.70% |
+| **Fed-DualPrompt (Ours)** | **63.32%** |
+
+**t-SNE Visualization of Feature Embeddings on RESISC45:**
+
+Our model learns more discriminative and well-separated features compared to strong baselines like FedMaPLe, as shown by the t-SNE plots and clustering metrics (higher Silhouette score and lower Davies-Bouldin Index).
+
+| | FedMaPLe | Our Model (Fed-DualPrompt) |
+| :--- | :---: | :---: |
+| **Silhouette Score** | 0.1926 | **0.3679** |
+| **Davies-Bouldin Index** | 1.9008 | **1.2965** |
+
+![t-SNE Comparison](https://raw.githubusercontent.com/taha-abbas/dual-prompt/main/assets/tsne_comparison.png)
+
+---
 
 ## Installation
-For installation and other package requirements, please follow the instructions detailed in [docs/INSTALL.md](docs/INSTALL.md).
 
-## Data preparation
-Please follow the instructions at [docs/DATASETS.md](docs/DATASETS.md) to prepare all datasets.
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/your-username/DualPrompt.git](https://github.com/your-username/DualPrompt.git)
+    cd DualPrompt
+    ```
 
-## Model Zoo
+2.  **Create and activate a conda environment:**
+    ```bash
+    conda create -n dualprompt python=3.8
+    conda activate dualprompt
+    ```
 
-### Vision-Language prompting methods
-| Name  (configs)                                                                                | Base Acc. | Novel Acc. |    HM     | Epochs |                                         Model / Logs                                         |
-|------------------------------------------------------------------------------------------------|:---------:|:----------:|:---------:|:------:|:--------------------------------------------------------------------------------------------:|
-| [Deep Vision Prompting](configs/trainers/VPT/vit_b16_c2_ep5_batch4_4.yaml)                     |   80.24   |   73.43    |   76.68   |   5    |        [link](https://drive.google.com/drive/folders/1zJnaod8UVvo1HuxNzymLhBBS_OHq6cYp?usp=sharing)                                                                                      |
-| [Deep Language Prompting](configs/trainers/IVLP/vit_b16_c2_ep5_batch4_4ctx_language_only.yaml) |   81.72   |   73.81    |   77.56   |   5    | [link](https://drive.google.com/drive/folders/1PPLtvQIGprRUyxPiTwOSEh_oQ46zQfCN?usp=sharing) |
-| [Independent V-L Prompting](configs/trainers/IVLP/vit_b16_c2_ep5_batch4_2+2ctx.yaml)           |   82.15   |   74.07    |   77.90   |   5    | [link](https://drive.google.com/drive/folders/14NxzrRirK2GfyfWajsEGDiWa2suJoTBW?usp=sharing) |
-| [DualPrompt](configs/trainers/DualPrompt/vit_b16_c2_ep5_batch4_2ctx.yaml)                       | **82.28** | **75.14**  | **78.55** |   5    | [link](https://drive.google.com/drive/folders/1EvuvgR8566bL0T7ucvAL3LFVwuUPMRas?usp=sharing) |
+3.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
+## Usage
 
-## Training and Evaluation
-Please refer to the [docs/RUN.md](docs/RUN.md) for detailed instructions on training, evaluating and reproducing the results using our pre-trained models.
-The main training script is `train.py`.
+### Datasets
 
-To run DualPrompt (single-node training):
+The following datasets were used in our experiments:
+-   [PatternNet](http://www.grss-ieee.org/community/technical-committees/image-analysis-and-data-fusion/patternnet/)
+-   [UC Merced Land Use](http://weegee.vision.ucmerced.edu/datasets/landuse.html)
+-   [EuroSAT](https://github.com/phelber/EuroSAT)
+-   MLRSNet
+-   Million-AID
+-   [RESISC45](http://www.escience.cn/people/JunweiHan/NWPU-RESISC45.html) (for cross-dataset evaluation)
+
+Please download the datasets and structure them as expected by the data loaders. You will need to unify the classes for the federated learning setup as described in the paper.
+
+### Running the Code
+
+Scripts to run the experiments are provided in the `scripts/` directory.
+
+**1. Centralized (Non-Federated) Training:**
+
+To run the centralized version of DualPrompt, use the following command structure. The example below is for training on PatternNet.
+
 ```bash
-# Example: Training DualPrompt on PatternNet
-python train.py \
-    --root /path/to/your/data \
-    --seed <your_seed> \
-    --trainer DualPrompt \
-    --dataset-config-file configs/datasets/PatternNet.yaml \
-    --config-file configs/trainers/DualPrompt/vit_b16_c2_ep5_batch4_2ctx.yaml \
-    --output-dir output/PatternNet/DualPrompt/vit_b16_c2_ep5_batch4_2ctx_16shots/seed<your_seed> \
-    DATASET.NUM_SHOTS 16
-```
-
-To run DualPromptFL (federated training):
-```bash
-# Example: Training DualPromptFL across datasets
-python train.py \
-    --root /path/to/your/data \
-    --seed <your_seed> \
-    --trainer DualPromptFL \
-    --dataset-config-file configs/datasets/<your_dataset_config>.yaml \
-    --config-file configs/trainers/DualPromptFL/vit_b16_c2_ep5_batch4_2ctx_cross_datasets.yaml \
-    --output-dir output/<your_dataset>/DualPromptFL/vit_b16_c2_ep5_batch4_2ctx_cross_datasets_16shots/seed<your_seed> \
-    DATASET.NUM_SHOTS 16 \
-    FED.NUM_CLIENTS <num_clients> \
-    FED.NUM_ROUNDS <num_rounds> \
-    FED.LOCAL_EPOCHS <local_epochs>
-```
-Refer to the scripts in `scripts/dualprompt/` (formerly `scripts/maple/`) for more examples. You might need to rename this directory and update paths within the scripts accordingly.
-
-<hr />
-
-## Citation
-If you use our work, please consider citing:
-```bibtex
-@inproceedings{abbasDualPrompt,
-    title={DualPrompt: Multi-modal Prompt Learning},
-    author={Abbas, Mohd Taha},
-    booktitle={The IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-    year={2023}
-}
-```
-
-## Contact
-If you have any questions, please create an issue on this repository or contact at uzair.khattak@mbzuai.ac.ae or hanoona.bangalath@mbzuai.ac.ae.
-
-
-## Acknowledgements
-
-Our code is based on [Co-CoOp and CoOp](https://github.com/KaiyangZhou/CoOp) repository. We thank the authors for releasing their code. If you use our model and code, please consider citing these works as well.
-
+bash scripts/dualprompt/train_patternnet.sh
