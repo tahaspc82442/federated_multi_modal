@@ -167,13 +167,74 @@ The following datasets were used in our experiments:
 
 Please download the datasets and structure them as expected by the data loaders. You will need to unify the classes for the federated learning setup as described in the paper.
 
-### Running the Code
+Here is the requested "Running the Experiments" section in Markdown format.
 
-Scripts to run the experiments are provided in the `scripts/` directory.
+---
 
-**1. Centralized (Non-Federated) Training:**
+## **Running the Experiments**
 
-To run the centralized version of DualPrompt, use the following command structure. The example below is for training on PatternNet.
+This section outlines the commands to train and evaluate the **DualPrompt** model in both centralized and federated learning environments.
 
+### **Prerequisites**
+
+Before proceeding, please ensure that you have:
+1.  **Installed all dependencies** by running `pip install -r requirements.txt`.
+2.  **Downloaded the required datasets** (e.g., PatternNet, UC Merced, EuroSAT) and configured the data paths correctly.
+
+### **Script Arguments**
+
+The execution scripts accept the following command-line arguments:
+* `--dataset`: **(Required)** The name of the target dataset (e.g., `patternnet`, `ucmerced`).
+* `--seed`: **(Required)** An integer for the random seed to ensure reproducible results (e.g., `1`, `42`).
+* `-epoch`: **(Required for testing)** The epoch number of the saved model checkpoint to evaluate (e.g., `50`).
+
+---
+
+### **Centralized Training**
+
+To train the model on a single, centralized dataset, use the following command structure.
+
+#### **Syntax**
 ```bash
-bash scripts/dualprompt/train_patternnet.sh
+bash scripts/dualpromptcentralized/xd_train_dualprompt --dataset [DATASET_NAME] --seed [SEED_NUMBER]
+```
+
+#### **Example (Training on PatternNet with seed 1)**
+```bash
+bash scripts/dualpromptcentralized/xd_train_dualprompt --dataset patternNet --seed 1
+```
+
+---
+
+### **Federated Learning Simulation**
+
+These scripts simulate the federated training and evaluation process across multiple clients.
+
+#### **1. Federated Training**
+
+This script initiates a complete federated training run, aggregating model updates over a series of communication rounds.
+
+##### **Syntax**
+```bash
+bash scripts/dualpromptfl/xd_train_dualprompt.sh --dataset [UNIFIED_DATASET] --seed [SEED_NUMBER]
+```
+
+##### **Example (Starting a federated run with seed 42)**
+```bash
+bash scripts/dualpromptfl/xd_train_dualprompt.sh --dataset PatternNet --seed 42
+```
+*(Note: Replace `--dataset` with the name of the dataset used in your federated setup.)*
+
+#### **2. Federated Testing**
+
+After federated training is complete, this script evaluates the performance of a specific global model checkpoint.
+
+##### **Syntax**
+```bash
+bash scripts/dualpromptfl/xd_test_dualprompt.sh --dataset [UNIFIED_DATASET] --seed [SEED_NUMBER] -epoch [EPOCH_TO_TEST]
+```
+
+##### **Example (Evaluating the model from round 50)**
+```bash
+bash scripts/dualpromptfl/xd_test_dualprompt.sh --dataset PatternNet --seed 42 -epoch 50
+```
