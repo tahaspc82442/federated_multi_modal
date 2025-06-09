@@ -53,7 +53,7 @@ The core of DualPrompt is the introduction of learnable prompts, $\mathbf{P}_i$ 
 
 $$L_{\text{total}} = L_{\text{cls}} + \lambda_{\text{align}} L_{\text{align}}$$
 
-![Federated Learning Setup](https://raw.githubusercontent.com/taha-abbas/dual-prompt/main/assets/federated.svg)
+![Federated Learning Setup](./fed.svg)
 *Our model in a federated learning setting.*
 
 ### Federated Learning Setup
@@ -130,7 +130,7 @@ Our model learns more discriminative and well-separated features compared to str
 | **Silhouette Score** | 0.1926 | **0.3679** |
 | **Davies-Bouldin Index** | 1.9008 | **1.2965** |
 
-![t-SNE Comparison](https://raw.githubusercontent.com/taha-abbas/dual-prompt/main/assets/tsne_comparison.png)
+
 
 ---
 
