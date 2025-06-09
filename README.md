@@ -150,7 +150,7 @@ Our model learns more discriminative and well-separated features compared to str
 
 3.  **Install dependencies:**
     ```bash
-    pip install -r requirements.txt
+    same dependencies as dassl
     ```
 
 ## Usage
@@ -178,7 +178,7 @@ This section outlines the commands to train and evaluate the **DualPrompt** mode
 ### **Prerequisites**
 
 Before proceeding, please ensure that you have:
-1.  **Installed all dependencies** by running `pip install -r requirements.txt`.
+1.  **Installed all dependencies** refer to dassl repository.
 2.  **Downloaded the required datasets** (e.g., PatternNet, UC Merced, EuroSAT) and configured the data paths correctly.
 
 ### **Script Arguments**
